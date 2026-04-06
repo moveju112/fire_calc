@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { calcProjection, calcAllAccountsProjection } from '../projection'
 import type { Account } from '../../types'
