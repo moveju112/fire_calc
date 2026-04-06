@@ -1,13 +1,7 @@
 import type { YearlyProjection } from '../../types'
+import { fmt } from '../../utils/format'
 
 type Props = { projections: YearlyProjection[] }
-
-function fmt(n: number) {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}십억`
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(0)}만`
-  return `${Math.round(n).toLocaleString()}`
-}
 
 export function ProjectionTable({ projections }: Props) {
   return (

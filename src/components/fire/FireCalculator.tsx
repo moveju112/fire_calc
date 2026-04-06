@@ -1,12 +1,6 @@
 import { usePortfolioStore } from '../../store/portfolioStore'
 import { calcAllAccountsProjection } from '../../utils/projection'
-
-function fmt(n: number) {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}십억`
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(0)}만`
-  return `${Math.round(n).toLocaleString()}`
-}
+import { fmt } from '../../utils/format'
 
 export function FireCalculator() {
   const accounts = usePortfolioStore((s) => s.accounts)
