@@ -14,6 +14,7 @@ const singleStockAccount: Account = {
       annualGrowth: 10,
       dividendYield: 2,
       dividendGrowth: 5,
+      dividendFrequency: 1 as const,  // 연배당: 기존 테스트와 동일 조건
     },
   ],
 }

@@ -1,8 +1,9 @@
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType } from '../../types'
 
-export type TabId = AccountType | 'projection' | 'fire'
+export type TabId = AccountType | 'contribution' | 'projection' | 'fire'
 
 const ANALYSIS_TABS: { id: TabId; label: string }[] = [
+  { id: 'contribution', label: '월 납입' },
   { id: 'projection', label: '예측 분석' },
   { id: 'fire', label: 'FIRE 계산' },
 ]

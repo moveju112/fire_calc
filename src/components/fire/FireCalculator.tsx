@@ -4,10 +4,11 @@ import { fmt } from '../../utils/format'
 
 export function FireCalculator() {
   const accounts = usePortfolioStore((s) => s.accounts)
+  const contributions = usePortfolioStore((s) => s.contributions)
   const fireTarget = usePortfolioStore((s) => s.fireTarget)
   const setFireTarget = usePortfolioStore((s) => s.setFireTarget)
 
-  const projections = calcAllAccountsProjection(Object.values(accounts))
+  const projections = calcAllAccountsProjection(Object.values(accounts), contributions)
   const currentAsset = Object.values(accounts).reduce((s, a) => s + a.totalAmount, 0)
 
   const requiredByExpense =

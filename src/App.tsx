@@ -2,14 +2,18 @@ import { useState } from 'react'
 import { Header } from './components/layout/Header'
 import { TabNav, type TabId } from './components/layout/TabNav'
 import { AccountTab } from './components/portfolio/AccountTab'
+import { ContributionTab } from './components/contribution/ContributionTab'
 import { ProjectionTab } from './components/projection/ProjectionTab'
 import { FireCalculator } from './components/fire/FireCalculator'
 import { ACCOUNT_TYPES, type AccountType } from './types'
+import { useHashbang } from './hooks/useHashbang'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('isa')
+  const { enabled: hashbangEnabled, toggle: toggleHashbang } = useHashbang()
 
   function renderContent() {
+    if (activeTab === 'contribution') return <ContributionTab />
     if (activeTab === 'projection') return <ProjectionTab />
     if (activeTab === 'fire') return <FireCalculator />
     if (ACCOUNT_TYPES.includes(activeTab as AccountType)) {
@@ -20,7 +24,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
-      <Header />
+      <Header hashbangEnabled={hashbangEnabled} onHashbangToggle={toggleHashbang} />
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="flex-1">{renderContent()}</main>
     </div>

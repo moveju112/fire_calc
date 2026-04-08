@@ -1,20 +1,33 @@
 import { useState } from 'react'
 import { usePortfolioStore } from '../../store/portfolioStore'
-import { calcProjection, calcAllAccountsProjection } from '../../utils/projection'
+import { calcProjection, calcAllAccountsProjection, calcFireSimProjection } from '../../utils/projection'
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType } from '../../types'
 import { ProjectionTable } from './ProjectionTable'
 import { ProjectionChart } from './ProjectionChart'
+import { FireSimChart } from './FireSimChart'
 
 type ViewMode = 'all' | AccountType
 
 export function ProjectionTab() {
   const accounts = usePortfolioStore((s) => s.accounts)
+  const contributions = usePortfolioStore((s) => s.contributions)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
+  const [fireSimYear, setFireSimYear] = useState<number | null>(null)
 
   const projections =
     viewMode === 'all'
-      ? calcAllAccountsProjection(Object.values(accounts))
-      : calcProjection(accounts[viewMode])
+      ? calcAllAccountsProjection(Object.values(accounts), contributions)
+      : calcProjection(accounts[viewMode], contributions[viewMode])
+
+  // FIRE 시뮬: 전체 계좌 기준으로만 계산 (저장 안 함)
+  const fireSim =
+    fireSimYear
+      ? calcFireSimProjection(Object.values(accounts), contributions, fireSimYear)
+      : null
+
+  const handleFireSim = (year: number) => {
+    setFireSimYear(year === 0 ? null : year)
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -48,12 +61,26 @@ export function ProjectionTab() {
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 mb-6">
-        <ProjectionTable projections={projections} />
+        <ProjectionTable
+          projections={projections}
+          fireSimYear={fireSimYear}
+          onFireSim={handleFireSim}
+        />
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
+      <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
         <ProjectionChart projections={projections} />
       </div>
+
+      {fireSim && fireSimYear && (
+        <div className="bg-white rounded-lg border border-amber-200 p-4">
+          <FireSimChart
+            fireYear={fireSimYear}
+            pre={fireSim.pre}
+            post={fireSim.post}
+          />
+        </div>
+      )}
     </div>
   )
 }
