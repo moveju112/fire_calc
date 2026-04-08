@@ -6,7 +6,21 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
   base: './',
-  build: { minify: false },
+  build: {
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+      mangle: {
+        toplevel: true,
+      },
+      format: {
+        comments: false,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
