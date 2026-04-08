@@ -22,6 +22,15 @@ export function calcAfterTax(accountType: AccountType, dividendBeforeTax: number
 }
 
 /**
+ * 과세이연 계좌(IRP, 연금저축)는 운용 중 세금 없이 전액 재투자.
+ * 나머지는 calcAfterTax와 동일.
+ */
+export function calcReinvestAmount(accountType: AccountType, dividendBeforeTax: number): number {
+  if (accountType === 'pension' || accountType === 'irp') return dividendBeforeTax
+  return calcAfterTax(accountType, dividendBeforeTax)
+}
+
+/**
  * ISA 월/분기 지급 시 연간 누적액 기준으로 세후 금액 계산
  * @param payment       이번 지급 세전 금액
  * @param yearCumulative 이번 지급 이전까지의 올해 누적 세전 배당 합계

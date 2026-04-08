@@ -1,5 +1,5 @@
 import type { Account, MonthlyContribution, YearlyProjection } from '../types'
-import { calcAfterTax, calcIsaAfterTaxIncremental } from './taxCalc'
+import { calcAfterTax, calcReinvestAmount, calcIsaAfterTaxIncremental } from './taxCalc'
 
 function shouldPayThisMonth(frequency: 1 | 4 | 12, month: number): boolean {
   if (frequency === 12) return true
@@ -76,7 +76,7 @@ function runAccountSimulation(
       // 3) 배당
       let monthPaymentBefore = 0
       for (const stock of account.stocks) {
-        const freq = stock.dividendFrequency ?? 4
+        const freq = stock.dividendFrequency ?? 12
         if (!shouldPayThisMonth(freq, month)) continue
         const balance = balances.get(stock.id) ?? 0
         // absYear 로 dividendGrowth 적용 → FIRE 이후도 올바른 성장률 반영
@@ -86,22 +86,27 @@ function runAccountSimulation(
 
       if (monthPaymentBefore <= 0) continue
 
-      // 4) 세후
-      let monthPaymentAfter: number
+      // 4) 세후 계산 (표시용 / 재투자용 분리)
+      let monthPaymentAfter: number   // 표시용: 인출 시 실제 받을 금액
+      let monthReinvestAmount: number // 재투자용: 과세이연 계좌는 세전 전액
+
       if (account.type === 'isa') {
         monthPaymentAfter = calcIsaAfterTaxIncremental(monthPaymentBefore, isaYearCumulative)
         isaYearCumulative += monthPaymentBefore
+        monthReinvestAmount = monthPaymentAfter
       } else {
         monthPaymentAfter = calcAfterTax(account.type, monthPaymentBefore)
+        // IRP·연금저축: 과세이연 → 운용 중 전액 재투자, 인출 시에만 3.3%
+        monthReinvestAmount = calcReinvestAmount(account.type, monthPaymentBefore)
       }
 
       yearDividendBeforeTax += monthPaymentBefore
       yearDividendAfterTax += monthPaymentAfter
 
-      // 5) 재투자 (비율 합 초과 방지 가중치 사용)
+      // 5) 재투자 (과세이연 계좌는 세전 전액 재투자)
       if (reinvestWeights.size > 0) {
         for (const [stockId, weight] of reinvestWeights) {
-          balances.set(stockId, (balances.get(stockId) ?? 0) + monthPaymentAfter * weight)
+          balances.set(stockId, (balances.get(stockId) ?? 0) + monthReinvestAmount * weight)
         }
       }
     }
@@ -118,7 +123,7 @@ function runAccountSimulation(
 export function calcProjection(account: Account, contribution?: MonthlyContribution): YearlyProjection[] {
   const initialBalances = new Map(account.stocks.map((s) => [s.id, account.totalAmount * (s.allocation / 100)]))
   return runAccountSimulation(account, {
-    years: 10,
+    years: 20,
     yearOffset: 0,
     initialBalances,
     contribution,
@@ -130,7 +135,7 @@ export function calcAllAccountsProjection(
   accounts: Account[],
   contributions?: Record<string, MonthlyContribution>
 ): YearlyProjection[] {
-  const combined: YearlyProjection[] = Array.from({ length: 10 }, (_, i) => ({
+  const combined: YearlyProjection[] = Array.from({ length: 20 }, (_, i) => ({
     year: i + 1, totalAsset: 0, dividendBeforeTax: 0, dividendAfterTax: 0,
   }))
   for (const account of accounts) {

@@ -63,7 +63,7 @@ export const usePortfolioStore = create<PortfolioStore>()(
                   annualGrowth: 0,
                   dividendYield: 0,
                   dividendGrowth: 0,
-                  dividendFrequency: 4,
+                  dividendFrequency: 12,
                 },
               ],
             },

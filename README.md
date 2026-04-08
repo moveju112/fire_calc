@@ -1,73 +1,115 @@
-# React + TypeScript + Vite
+# FIRE 계산기
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+배당 투자 포트폴리오 기반의 FIRE(Financial Independence, Retire Early) 시뮬레이터입니다.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 사용 방법 (일반 사용자)
 
-## React Compiler
+1. 이 저장소에서 **`dist` 폴더만 다운로드**합니다.
+2. 다운로드한 `dist` 폴더 안의 **`index.html`을 브라우저로 실행**합니다.
+   - 별도 서버 설치나 빌드 과정이 필요 없습니다.
+3. 다른 브라우저나 다른 기기에 공유하고 싶다면, 우측 상단의 **URL 공유 토글을 켠 후 URL 복사** 버튼을 사용하세요.
+   - 복사된 URL을 공유하면 동일한 포트폴리오 데이터가 그대로 열립니다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 주요 기능
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **포트폴리오 입력**: 계좌별 종목, 비중, 주가성장률, 배당률, 배당성장률 설정
+- **20년 예측 분석**: 연도별 총자산 및 세전/세후 배당 추이
+- **FIRE 계산**: 4% 룰 기반 목표 자산 및 달성 시점 산출
+- **FIRE 시뮬레이션**: 특정 연도에 은퇴 시 이후 배당 흐름 시뮬레이션
+- **URL 공유**: 포트폴리오 데이터를 URL에 인코딩하여 공유
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 계좌 유형별 세금 처리
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| 계좌 | 세율 | 처리 방식 |
+|------|------|-----------|
+| ISA | 0% / 9.9% | 연간 200만 원까지 비과세, 초과분은 9.9% 분리과세 |
+| 연금저축 | 3.3% | **과세이연** — 운용 중 전액 재투자, 인출 시 3.3% |
+| IRP | 3.3% | **과세이연** — 운용 중 전액 재투자, 인출 시 3.3% |
+| 해외직투 | 15% | 배당 발생 시 즉시 과세 |
+| 국내투자 | 15.4% | 배당 발생 시 즉시 과세 |
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+> **과세이연 계좌(IRP, 연금저축)**는 운용 기간에 세금 없이 전액 재투자되어 복리 효과가 극대화됩니다.
+> 표시되는 "세후 배당"은 실제 인출 시 받게 될 금액(3.3% 차감)을 기준으로 표시됩니다.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 포트폴리오 입력 항목
+
+각 계좌에서 종목별로 아래 항목을 입력합니다.
+
+| 항목 | 설명 |
+|------|------|
+| 종목명 | ETF/주식 이름 |
+| 비중(%) | 계좌 내 비중. 합계 100% 초과 시 경고 표시 |
+| 주가성장률(%) | 연간 주가 상승률 (예: S&P500 → 10%) |
+| 배당률(%) | 현재 주가 대비 연간 배당금 비율 (예: SCHD → 3.5%) |
+| 배당성장(%) | 배당금 연간 성장률 (예: SCHD → 6%) |
+| 배당주기 | 월배당 / 분기 / 연배당 |
+
+> 소수점 입력 가능 (예: `0.2`, `3.5`)
+
+---
+
+## 배당 재투자 설정
+
+각 계좌 하단에서 받은 배당금을 어느 종목에 얼마 비율로 재투자할지 설정할 수 있습니다.
+비율 합계가 100%가 되어야 정상 작동합니다.
+
+---
+
+## 예측 분석
+
+- **현재 포함 21행** (현재 + 1~20년 후) 표시
+- 각 행: 총자산 / 세전 연간 배당 / 세후 연간 배당 / 세후 월 배당 추정
+- 계좌별 또는 전체 합산 뷰 전환 가능
+- **FIRE 버튼**: 해당 연도에 은퇴한다고 가정했을 때의 이후 배당 흐름을 차트로 시뮬레이션
+
+---
+
+## FIRE 계산기
+
+| 항목 | 설명 |
+|------|------|
+| 목표 총자산 | 은퇴 시 보유하고 싶은 자산 |
+| 목표 월 지출 | 은퇴 후 월 생활비 |
+| 4% 룰 필요 자산 | 월 지출 × 12 ÷ 0.04 로 자동 계산 |
+| 실질 목표 자산 | 목표 총자산과 4% 룰 필요 자산 중 큰 값 |
+| 달성 예상 시점 | 예측 분석 기준으로 목표 자산 도달 연도 표시 |
+| 달성률 | 현재 자산 / 실질 목표 자산 (프로그레스 바) |
+
+---
+
+## URL 공유
+
+헤더의 **URL 공유** 토글을 켜면 포트폴리오 데이터가 URL에 인코딩됩니다.
+**URL 복사** 버튼으로 링크를 복사하여 다른 사람에게 공유하거나 북마크로 저장할 수 있습니다.
+
+> 브라우저를 새로고침해도 URL을 통해 데이터가 복원됩니다.
+
+---
+
+## 계산 가정 사항
+
+- 주가성장률은 매월 복리로 적용됩니다.
+- 배당성장률은 연 단위로 적용됩니다 (매년 배당률이 누적 상승).
+- 납입금은 매월 균등 납입으로 계산됩니다.
+- 배당 재투자는 세후 금액(과세이연 계좌는 세전 전액) 기준으로 처리됩니다.
+- ISA 비과세 한도(200만 원)는 연간 누적 기준으로 적용됩니다.
+
+---
+
+## 현재 미지원 사항 (계산에 반영되지 않음)
+
+> **⚠ 이 계산기는 배당 투자 전용입니다.**
+> 배당을 지급하지 않는 성장주(예: 무배당 ETF, 성장형 주식)는 주가성장에 의한 자산 증가만 반영되며, 배당 수익 및 FIRE 배당 달성 시점 계산에서 의미 있는 결과를 얻을 수 없습니다.
+> 성장주 중심 포트폴리오에는 적합하지 않습니다.
+
+- **ISA 연간 납입 한도**: ISA는 연간 2,000만 원, 최대 1억 원의 납입 한도가 있으나 본 계산기에서는 제한 없이 납입 가능한 것으로 가정합니다.
+- **ISA 풍차돌리기**: 만기 해지 후 재가입하여 비과세 한도를 반복 활용하는 전략은 반영되어 있지 않습니다.
+- **IRP/연금저축 연간 납입 한도**: 세액공제 한도(연 900만 원) 및 납입 한도는 고려되지 않습니다.

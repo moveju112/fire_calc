@@ -6,13 +6,15 @@ import type { YearlyProjection } from '../../types'
 type Props = { projections: YearlyProjection[] }
 
 function fmtYAxis(value: number) {
+  if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(0)}조`
   if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(0)}억`
   if (value >= 10_000) return `${(value / 10_000).toFixed(0)}만`
   return `${value}`
 }
 
 function fmtTooltip(value: number) {
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}억원`
+  if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(0)}조원`
+  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(0)}억원`
   if (value >= 10_000) return `${(value / 10_000).toFixed(0)}만원`
   return `${Math.round(value).toLocaleString()}원`
 }

@@ -9,10 +9,30 @@ export function Header({ hashbangEnabled, onHashbangToggle }: Props) {
   const [copied, setCopied] = useState(false)
 
   function copyUrl() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    const url = window.location.href
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }).catch(() => fallbackCopy(url))
+    } else {
+      fallbackCopy(url)
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    const el = document.createElement('textarea')
+    el.value = text
+    el.style.position = 'fixed'
+    el.style.opacity = '0'
+    document.body.appendChild(el)
+    el.focus()
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (

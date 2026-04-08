@@ -3,11 +3,13 @@ import { fmt } from '../../utils/format'
 
 type Props = {
   projections: YearlyProjection[]
+  currentTotalAsset: number
+  currentDividend: { before: number; after: number }
   fireSimYear?: number | null
   onFireSim?: (year: number) => void
 }
 
-export function ProjectionTable({ projections, fireSimYear, onFireSim }: Props) {
+export function ProjectionTable({ projections, currentTotalAsset, currentDividend, fireSimYear, onFireSim }: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -22,6 +24,16 @@ export function ProjectionTable({ projections, fireSimYear, onFireSim }: Props) 
           </tr>
         </thead>
         <tbody>
+          {/* 현재 행 */}
+          <tr className="border-b border-slate-100 bg-blue-50">
+            <td className="px-4 py-3 font-medium text-blue-700">현재</td>
+            <td className="px-4 py-3 text-right text-slate-800">{fmt(currentTotalAsset)}원</td>
+            <td className="px-4 py-3 text-right text-slate-600">{fmt(currentDividend.before)}원</td>
+            <td className="px-4 py-3 text-right text-emerald-600 font-medium">{fmt(currentDividend.after)}원</td>
+            <td className="px-4 py-3 text-right text-emerald-500">{fmt(currentDividend.after / 12)}원</td>
+            {onFireSim && <td className="px-4 py-3" />}
+          </tr>
+
           {projections.map((p) => {
             const isFireYear = fireSimYear === p.year
             return (

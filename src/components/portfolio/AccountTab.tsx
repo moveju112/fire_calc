@@ -61,7 +61,9 @@ export function AccountTab({ accountType }: Props) {
         <span className="text-sm text-slate-500">원</span>
         {account.totalAmount > 0 && (
           <span className="text-sm text-slate-400">
-            ({(account.totalAmount / 100_000_000).toFixed(2)}억)
+            ({account.totalAmount >= 1_000_000_000_000
+              ? `${(account.totalAmount / 1_000_000_000_000).toFixed(0)}조`
+              : `${(account.totalAmount / 100_000_000).toFixed(0)}억`})
           </span>
         )}
       </div>
@@ -80,7 +82,7 @@ export function AccountTab({ accountType }: Props) {
                 <th className="px-3 py-2 text-left">종목명</th>
                 <th className="px-3 py-2 text-left">비중(%)</th>
                 <th className="px-3 py-2 text-right">금액 (원)</th>
-                <th className="px-3 py-2 text-left">성장률(%)</th>
+                <th className="px-3 py-2 text-left">주가성장률(%)</th>
                 <th className="px-3 py-2 text-left">배당률(%)</th>
                 <th className="px-3 py-2 text-left">배당성장(%)</th>
                 <th className="px-3 py-2 text-left">배당주기</th>

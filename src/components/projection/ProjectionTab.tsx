@@ -1,10 +1,26 @@
 import { useState } from 'react'
 import { usePortfolioStore } from '../../store/portfolioStore'
 import { calcProjection, calcAllAccountsProjection, calcFireSimProjection } from '../../utils/projection'
-import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType } from '../../types'
+import { calcAfterTax } from '../../utils/taxCalc'
+import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType, type Account } from '../../types'
 import { ProjectionTable } from './ProjectionTable'
 import { ProjectionChart } from './ProjectionChart'
 import { FireSimChart } from './FireSimChart'
+
+function calcCurrentDividend(accountList: Account[]): { before: number; after: number } {
+  let before = 0
+  let after = 0
+  for (const account of accountList) {
+    let accountBefore = 0
+    for (const stock of account.stocks) {
+      const balance = account.totalAmount * (stock.allocation / 100)
+      accountBefore += balance * (stock.dividendYield / 100)
+    }
+    before += accountBefore
+    after += calcAfterTax(account.type, accountBefore)
+  }
+  return { before, after }
+}
 
 type ViewMode = 'all' | AccountType
 
@@ -19,6 +35,16 @@ export function ProjectionTab() {
       ? calcAllAccountsProjection(Object.values(accounts), contributions)
       : calcProjection(accounts[viewMode], contributions[viewMode])
 
+  const currentTotalAsset =
+    viewMode === 'all'
+      ? Object.values(accounts).reduce((sum, a) => sum + a.totalAmount, 0)
+      : accounts[viewMode].totalAmount
+
+  const currentDividend =
+    viewMode === 'all'
+      ? calcCurrentDividend(Object.values(accounts))
+      : calcCurrentDividend([accounts[viewMode]])
+
   // FIRE 시뮬: 전체 계좌 기준으로만 계산 (저장 안 함)
   const fireSim =
     fireSimYear
@@ -32,7 +58,7 @@ export function ProjectionTab() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-slate-800">10년 예측 분석</h2>
+        <h2 className="text-lg font-semibold text-slate-800">20년 예측 분석</h2>
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setViewMode('all')}
@@ -63,6 +89,8 @@ export function ProjectionTab() {
       <div className="bg-white rounded-lg border border-slate-200 mb-6">
         <ProjectionTable
           projections={projections}
+          currentTotalAsset={currentTotalAsset}
+          currentDividend={currentDividend}
           fireSimYear={fireSimYear}
           onFireSim={handleFireSim}
         />

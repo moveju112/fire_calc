@@ -20,12 +20,43 @@ function NumInput({
   placeholder?: string
   className?: string
 }) {
+  const [display, setDisplay] = useState(() => value === 0 ? '' : String(value))
+  const focused = useRef(false)
+
+  // 포커스 밖에 있을 때만 외부 값으로 동기화
+  useEffect(() => {
+    if (!focused.current) {
+      setDisplay(value === 0 ? '' : String(value))
+    }
+  }, [value])
+
   return (
     <input
-      type="number"
-      value={value === 0 ? '' : value}
+      type="text"
+      inputMode="decimal"
+      value={display}
       placeholder={placeholder ?? '0'}
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+      onFocus={() => { focused.current = true }}
+      onBlur={() => {
+        focused.current = false
+        const num = parseFloat(display)
+        if (isNaN(num)) {
+          setDisplay('')
+          onChange(0)
+        } else {
+          setDisplay(String(num))
+          onChange(num)
+        }
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        // 숫자, 소수점, 마이너스만 허용
+        if (/^-?[0-9]*\.?[0-9]*$/.test(raw)) {
+          setDisplay(raw)
+          const num = parseFloat(raw)
+          if (!isNaN(num)) onChange(num)
+        }
+      }}
       className={`w-full px-2 py-1.5 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 ${className ?? ''}`}
     />
   )
