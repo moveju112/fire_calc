@@ -80,7 +80,11 @@ function runAccountSimulation(
         if (!shouldPayThisMonth(freq, month)) continue
         const balance = balances.get(stock.id) ?? 0
         // absYear 로 dividendGrowth 적용 → FIRE 이후도 올바른 성장률 반영
-        const effectiveYield = (stock.dividendYield / 100) * Math.pow(1 + stock.dividendGrowth / 100, absYear)
+        // dividendGrowth > 0: "주당 배당금" 성장률 → 현재가 기준 배당률 = yield × ((1+dg)/(1+pg))^year
+        // dividendGrowth = 0: 현재가 대비 고정 배당률 (커버드콜 등) → yield 그대로
+        const effectiveYield = stock.dividendGrowth === 0
+          ? stock.dividendYield / 100
+          : (stock.dividendYield / 100) * Math.pow((1 + stock.dividendGrowth / 100) / (1 + stock.annualGrowth / 100), absYear)
         monthPaymentBefore += balance * (effectiveYield / freq)
       }
 
