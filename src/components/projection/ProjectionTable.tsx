@@ -20,6 +20,7 @@ export function ProjectionTable({ projections, currentTotalAsset, currentDividen
             <th className="px-4 py-3 text-right">세전 연간 배당</th>
             <th className="px-4 py-3 text-right">세후 연간 배당</th>
             <th className="px-4 py-3 text-right">세후 월 배당 (추정)</th>
+            <th className="px-4 py-3 text-right">배당률</th>
             {onFireSim && <th className="px-4 py-3 text-center">FIRE 시뮬</th>}
           </tr>
         </thead>
@@ -27,10 +28,13 @@ export function ProjectionTable({ projections, currentTotalAsset, currentDividen
           {/* 현재 행 */}
           <tr className="border-b border-slate-100 bg-blue-50">
             <td className="px-4 py-3 font-medium text-blue-700">현재</td>
-            <td className="px-4 py-3 text-right text-slate-800">{fmt(currentTotalAsset)}원</td>
-            <td className="px-4 py-3 text-right text-slate-600">{fmt(currentDividend.before)}원</td>
-            <td className="px-4 py-3 text-right text-emerald-600 font-medium">{fmt(currentDividend.after)}원</td>
-            <td className="px-4 py-3 text-right text-emerald-500">{fmt(currentDividend.after / 12)}원</td>
+            <td className="px-4 py-3 text-right text-slate-800">{fmt(currentTotalAsset, 2)}원</td>
+            <td className="px-4 py-3 text-right text-slate-600">{fmt(currentDividend.before, 2)}원</td>
+            <td className="px-4 py-3 text-right text-emerald-600 font-medium">{fmt(currentDividend.after, 2)}원</td>
+            <td className="px-4 py-3 text-right text-emerald-500">{fmt(currentDividend.after / 12, 2)}원</td>
+            <td className="px-4 py-3 text-right text-slate-500">
+              {currentTotalAsset > 0 ? `${(currentDividend.after / currentTotalAsset * 100).toFixed(2)}%` : '-'}
+            </td>
             {onFireSim && <td className="px-4 py-3" />}
           </tr>
 
@@ -42,10 +46,13 @@ export function ProjectionTable({ projections, currentTotalAsset, currentDividen
                 className={`border-b border-slate-100 hover:bg-slate-50 ${isFireYear ? 'bg-amber-50' : ''}`}
               >
                 <td className="px-4 py-3 font-medium text-slate-700">{p.year}년 후</td>
-                <td className="px-4 py-3 text-right text-slate-800">{fmt(p.totalAsset)}원</td>
-                <td className="px-4 py-3 text-right text-slate-600">{fmt(p.dividendBeforeTax)}원</td>
-                <td className="px-4 py-3 text-right text-emerald-600 font-medium">{fmt(p.dividendAfterTax)}원</td>
-                <td className="px-4 py-3 text-right text-emerald-500">{fmt(p.dividendAfterTax / 12)}원</td>
+                <td className="px-4 py-3 text-right text-slate-800">{fmt(p.totalAsset, 2)}원</td>
+                <td className="px-4 py-3 text-right text-slate-600">{fmt(p.dividendBeforeTax, 2)}원</td>
+                <td className="px-4 py-3 text-right text-emerald-600 font-medium">{fmt(p.dividendAfterTax, 2)}원</td>
+                <td className="px-4 py-3 text-right text-emerald-500">{fmt(p.dividendAfterTax / 12, 2)}원</td>
+                <td className="px-4 py-3 text-right text-slate-500">
+                  {p.totalAsset > 0 ? `${(p.dividendAfterTax / p.totalAsset * 100).toFixed(2)}%` : '-'}
+                </td>
                 {onFireSim && (
                   <td className="px-4 py-3 text-center">
                     <button

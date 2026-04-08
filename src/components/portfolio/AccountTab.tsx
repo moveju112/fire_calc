@@ -38,7 +38,7 @@ export function AccountTab({ accountType }: Props) {
   }
 
   const totalAllocation = account.stocks.reduce((sum, s) => sum + s.allocation, 0)
-  const allocationOver = totalAllocation > 100
+  const allocationOver = totalAllocation > 100 + 0.0001
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
