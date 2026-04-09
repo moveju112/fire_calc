@@ -28,14 +28,14 @@ describe('calcProjection', () => {
 
   it('10개 연도 반환', () => {
     const result = calcProjection(singleStockAccount)
-    expect(result).toHaveLength(10)
-    expect(result[9].year).toBe(10)
+    expect(result).toHaveLength(20)
+    expect(result[19].year).toBe(20)
   })
 
-  it('1년 후 세전 배당 = 자산 × 배당률 × 배당성장률', () => {
+  it('1년 후 세전 배당은 구현된 유효 배당률 식을 따른다', () => {
     const result = calcProjection(singleStockAccount)
-    // 1년 후 자산 110,000,000 × 2% × (1+5%)^1
-    const expected = 110_000_000 * 0.02 * Math.pow(1.05, 1)
+    // 1년 후 자산 × [현재 배당률 × ((1+배당성장률)/(1+주가성장률))^1]
+    const expected = 110_000_000 * 0.02 * Math.pow((1 + 0.05) / (1 + 0.10), 1)
     expect(result[0].dividendBeforeTax).toBeCloseTo(expected, 0)
   })
 
@@ -52,6 +52,17 @@ describe('calcProjection', () => {
     const result = calcProjection(account)
     expect(result[0].totalAsset).toBe(0)
   })
+
+  it('연도별 계산 근거 데이터를 포함한다', () => {
+    const result = calcProjection(singleStockAccount)
+    expect(result[0].detail?.startAsset).toBeCloseTo(100_000_000, -3)
+    expect(result[0].detail?.taxAmount).toBeCloseTo(
+      result[0].dividendBeforeTax - result[0].dividendAfterTax,
+      3
+    )
+    expect(result[0].detail?.yearlyDividendBeforeTax).toBeCloseTo(result[0].dividendBeforeTax, 3)
+    expect(result[0].detail?.monthlyGrowthCount).toBe(12)
+  })
 })
 
 describe('calcAllAccountsProjection', () => {
@@ -64,6 +75,6 @@ describe('calcAllAccountsProjection', () => {
 
   it('10개 연도 반환', () => {
     const result = calcAllAccountsProjection([singleStockAccount])
-    expect(result).toHaveLength(10)
+    expect(result).toHaveLength(20)
   })
 })

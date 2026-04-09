@@ -54,9 +54,27 @@ export type MonthlyContribution = {
   allocations: ContributionAllocation[]
 }
 
+export type ProjectionDetail = {
+  startAsset: number
+  yearlyContribution: number
+  growthAmount: number
+  reinvestAmount: number
+  taxAmount: number
+  monthlyContributionCount: number
+  monthlyGrowthCount: number
+  paymentCount: number
+  monthlyDividendBeforeTax: number
+  quarterlyDividendBeforeTax: number
+  yearlyDividendBeforeTax: number
+  monthlyDividendAfterTax: number
+  quarterlyDividendAfterTax: number
+  yearlyDividendAfterTax: number
+}
+
 export type YearlyProjection = {
   year: number
   totalAsset: number
   dividendBeforeTax: number
   dividendAfterTax: number
+  detail?: ProjectionDetail
 }

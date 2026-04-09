@@ -1,4 +1,4 @@
-import type { Account, MonthlyContribution, YearlyProjection } from '../types'
+import type { Account, MonthlyContribution, ProjectionDetail, YearlyProjection } from '../types'
 import { calcAfterTax, calcReinvestAmount, calcIsaAfterTaxIncremental } from './taxCalc'
 
 function shouldPayThisMonth(frequency: 1 | 4 | 12, month: number): boolean {
@@ -52,29 +52,53 @@ function runAccountSimulation(
     : new Map<string, number>()
 
   for (let year = 1; year <= options.years; year++) {
+    let startAsset = 0
+    for (const balance of balances.values()) startAsset += balance
+
     // dividendGrowth 계산에 사용할 절대 연차 (FIRE 이후 구간 왜곡 방지)
     const absYear = options.yearOffset + year
 
     let yearDividendBeforeTax = 0
     let yearDividendAfterTax = 0
     let isaYearCumulative = 0
+    let yearlyContribution = 0
+    let yearlyGrowthAmount = 0
+    let yearlyReinvestAmount = 0
+    let monthlyContributionCount = 0
+    let paymentCount = 0
+    let monthlyDividendBeforeTax = 0
+    let quarterlyDividendBeforeTax = 0
+    let yearlyDividendBeforeTaxByFrequency = 0
+    let monthlyDividendAfterTax = 0
+    let quarterlyDividendAfterTax = 0
+    let yearlyDividendAfterTaxByFrequency = 0
 
     for (let month = 1; month <= 12; month++) {
       // 1) 월 납입
       if (options.contribution && options.contribution.monthlyAmount > 0) {
+        let monthContributionApplied = false
         for (const [stockId, weight] of contribWeights) {
-          balances.set(stockId, (balances.get(stockId) ?? 0) + options.contribution.monthlyAmount * weight)
+          const contributionAmount = options.contribution.monthlyAmount * weight
+          balances.set(stockId, (balances.get(stockId) ?? 0) + contributionAmount)
+          yearlyContribution += contributionAmount
+          if (contributionAmount > 0) monthContributionApplied = true
         }
+        if (monthContributionApplied) monthlyContributionCount += 1
       }
 
       // 2) 성장
       for (const stock of account.stocks) {
         const prev = balances.get(stock.id) ?? 0
-        balances.set(stock.id, prev * Math.pow(1 + stock.annualGrowth / 100, 1 / 12))
+        const next = prev * Math.pow(1 + stock.annualGrowth / 100, 1 / 12)
+        balances.set(stock.id, next)
+        yearlyGrowthAmount += next - prev
       }
 
       // 3) 배당
       let monthPaymentBefore = 0
+      let monthPaymentBeforeMonthly = 0
+      let monthPaymentBeforeQuarterly = 0
+      let monthPaymentBeforeYearly = 0
       for (const stock of account.stocks) {
         const freq = stock.dividendFrequency ?? 12
         if (!shouldPayThisMonth(freq, month)) continue
@@ -85,7 +109,11 @@ function runAccountSimulation(
         const effectiveYield = stock.dividendGrowth === 0
           ? stock.dividendYield / 100
           : (stock.dividendYield / 100) * Math.pow((1 + stock.dividendGrowth / 100) / (1 + stock.annualGrowth / 100), absYear)
-        monthPaymentBefore += balance * (effectiveYield / freq)
+        const payment = balance * (effectiveYield / freq)
+        monthPaymentBefore += payment
+        if (freq === 12) monthPaymentBeforeMonthly += payment
+        else if (freq === 4) monthPaymentBeforeQuarterly += payment
+        else monthPaymentBeforeYearly += payment
       }
 
       if (monthPaymentBefore <= 0) continue
@@ -106,11 +134,22 @@ function runAccountSimulation(
 
       yearDividendBeforeTax += monthPaymentBefore
       yearDividendAfterTax += monthPaymentAfter
+      paymentCount += 1
+      monthlyDividendBeforeTax += monthPaymentBeforeMonthly
+      quarterlyDividendBeforeTax += monthPaymentBeforeQuarterly
+      yearlyDividendBeforeTaxByFrequency += monthPaymentBeforeYearly
+
+      const monthTaxRate = monthPaymentBefore > 0 ? monthPaymentAfter / monthPaymentBefore : 0
+      monthlyDividendAfterTax += monthPaymentBeforeMonthly * monthTaxRate
+      quarterlyDividendAfterTax += monthPaymentBeforeQuarterly * monthTaxRate
+      yearlyDividendAfterTaxByFrequency += monthPaymentBeforeYearly * monthTaxRate
 
       // 5) 재투자 (과세이연 계좌는 세전 전액 재투자)
       if (reinvestWeights.size > 0) {
         for (const [stockId, weight] of reinvestWeights) {
-          balances.set(stockId, (balances.get(stockId) ?? 0) + monthReinvestAmount * weight)
+          const reinvestAmount = monthReinvestAmount * weight
+          balances.set(stockId, (balances.get(stockId) ?? 0) + reinvestAmount)
+          yearlyReinvestAmount += reinvestAmount
         }
       }
     }
@@ -118,7 +157,30 @@ function runAccountSimulation(
     let totalAsset = 0
     for (const b of balances.values()) totalAsset += b
 
-    results.push({ year, totalAsset, dividendBeforeTax: yearDividendBeforeTax, dividendAfterTax: yearDividendAfterTax })
+    const detail: ProjectionDetail = {
+      startAsset,
+      yearlyContribution,
+      growthAmount: yearlyGrowthAmount,
+      reinvestAmount: yearlyReinvestAmount,
+      taxAmount: yearDividendBeforeTax - yearDividendAfterTax,
+      monthlyContributionCount,
+      monthlyGrowthCount: 12,
+      paymentCount,
+      monthlyDividendBeforeTax,
+      quarterlyDividendBeforeTax,
+      yearlyDividendBeforeTax: yearlyDividendBeforeTaxByFrequency,
+      monthlyDividendAfterTax,
+      quarterlyDividendAfterTax,
+      yearlyDividendAfterTax: yearlyDividendAfterTaxByFrequency,
+    }
+
+    results.push({
+      year,
+      totalAsset,
+      dividendBeforeTax: yearDividendBeforeTax,
+      dividendAfterTax: yearDividendAfterTax,
+      detail,
+    })
   }
 
   return { projections: results, finalBalances: balances }
@@ -140,7 +202,26 @@ export function calcAllAccountsProjection(
   contributions?: Record<string, MonthlyContribution>
 ): YearlyProjection[] {
   const combined: YearlyProjection[] = Array.from({ length: 20 }, (_, i) => ({
-    year: i + 1, totalAsset: 0, dividendBeforeTax: 0, dividendAfterTax: 0,
+    year: i + 1,
+    totalAsset: 0,
+    dividendBeforeTax: 0,
+    dividendAfterTax: 0,
+    detail: {
+      startAsset: 0,
+      yearlyContribution: 0,
+      growthAmount: 0,
+      reinvestAmount: 0,
+      taxAmount: 0,
+      monthlyContributionCount: 0,
+      monthlyGrowthCount: 0,
+      paymentCount: 0,
+      monthlyDividendBeforeTax: 0,
+      quarterlyDividendBeforeTax: 0,
+      yearlyDividendBeforeTax: 0,
+      monthlyDividendAfterTax: 0,
+      quarterlyDividendAfterTax: 0,
+      yearlyDividendAfterTax: 0,
+    },
   }))
   for (const account of accounts) {
     const contribution = contributions?.[account.type]
@@ -148,6 +229,22 @@ export function calcAllAccountsProjection(
       combined[i].totalAsset += p.totalAsset
       combined[i].dividendBeforeTax += p.dividendBeforeTax
       combined[i].dividendAfterTax += p.dividendAfterTax
+      if (p.detail && combined[i].detail) {
+        combined[i].detail.startAsset += p.detail.startAsset
+        combined[i].detail.yearlyContribution += p.detail.yearlyContribution
+        combined[i].detail.growthAmount += p.detail.growthAmount
+        combined[i].detail.reinvestAmount += p.detail.reinvestAmount
+        combined[i].detail.taxAmount += p.detail.taxAmount
+        combined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
+        combined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
+        combined[i].detail.paymentCount += p.detail.paymentCount
+        combined[i].detail.monthlyDividendBeforeTax += p.detail.monthlyDividendBeforeTax
+        combined[i].detail.quarterlyDividendBeforeTax += p.detail.quarterlyDividendBeforeTax
+        combined[i].detail.yearlyDividendBeforeTax += p.detail.yearlyDividendBeforeTax
+        combined[i].detail.monthlyDividendAfterTax += p.detail.monthlyDividendAfterTax
+        combined[i].detail.quarterlyDividendAfterTax += p.detail.quarterlyDividendAfterTax
+        combined[i].detail.yearlyDividendAfterTax += p.detail.yearlyDividendAfterTax
+      }
     })
   }
   return combined
