@@ -34,6 +34,25 @@ type SimOptions = {
   enableReinvest: boolean
 }
 
+function createEmptyProjectionDetail(): ProjectionDetail {
+  return {
+    startAsset: 0,
+    yearlyContribution: 0,
+    growthAmount: 0,
+    reinvestAmount: 0,
+    taxAmount: 0,
+    monthlyContributionCount: 0,
+    monthlyGrowthCount: 0,
+    paymentCount: 0,
+    monthlyDividendBeforeTax: 0,
+    quarterlyDividendBeforeTax: 0,
+    yearlyDividendBeforeTax: 0,
+    monthlyDividendAfterTax: 0,
+    quarterlyDividendAfterTax: 0,
+    yearlyDividendAfterTax: 0,
+  }
+}
+
 function runAccountSimulation(
   account: Account,
   options: SimOptions
@@ -206,22 +225,7 @@ export function calcAllAccountsProjection(
     totalAsset: 0,
     dividendBeforeTax: 0,
     dividendAfterTax: 0,
-    detail: {
-      startAsset: 0,
-      yearlyContribution: 0,
-      growthAmount: 0,
-      reinvestAmount: 0,
-      taxAmount: 0,
-      monthlyContributionCount: 0,
-      monthlyGrowthCount: 0,
-      paymentCount: 0,
-      monthlyDividendBeforeTax: 0,
-      quarterlyDividendBeforeTax: 0,
-      yearlyDividendBeforeTax: 0,
-      monthlyDividendAfterTax: 0,
-      quarterlyDividendAfterTax: 0,
-      yearlyDividendAfterTax: 0,
-    },
+    detail: createEmptyProjectionDetail(),
   }))
   for (const account of accounts) {
     const contribution = contributions?.[account.type]
@@ -263,10 +267,18 @@ export function calcFireSimProjection(
   postFireYears = 20
 ): { pre: YearlyProjection[]; post: YearlyProjection[] } {
   const preCombined: YearlyProjection[] = Array.from({ length: fireYear }, (_, i) => ({
-    year: i + 1, totalAsset: 0, dividendBeforeTax: 0, dividendAfterTax: 0,
+    year: i + 1,
+    totalAsset: 0,
+    dividendBeforeTax: 0,
+    dividendAfterTax: 0,
+    detail: createEmptyProjectionDetail(),
   }))
   const postCombined: YearlyProjection[] = Array.from({ length: postFireYears }, (_, i) => ({
-    year: fireYear + i + 1, totalAsset: 0, dividendBeforeTax: 0, dividendAfterTax: 0,
+    year: fireYear + i + 1,
+    totalAsset: 0,
+    dividendBeforeTax: 0,
+    dividendAfterTax: 0,
+    detail: createEmptyProjectionDetail(),
   }))
 
   for (const account of accounts) {
@@ -295,11 +307,43 @@ export function calcFireSimProjection(
       preCombined[i].totalAsset += p.totalAsset
       preCombined[i].dividendBeforeTax += p.dividendBeforeTax
       preCombined[i].dividendAfterTax += p.dividendAfterTax
+      if (p.detail && preCombined[i].detail) {
+        preCombined[i].detail.startAsset += p.detail.startAsset
+        preCombined[i].detail.yearlyContribution += p.detail.yearlyContribution
+        preCombined[i].detail.growthAmount += p.detail.growthAmount
+        preCombined[i].detail.reinvestAmount += p.detail.reinvestAmount
+        preCombined[i].detail.taxAmount += p.detail.taxAmount
+        preCombined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
+        preCombined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
+        preCombined[i].detail.paymentCount += p.detail.paymentCount
+        preCombined[i].detail.monthlyDividendBeforeTax += p.detail.monthlyDividendBeforeTax
+        preCombined[i].detail.quarterlyDividendBeforeTax += p.detail.quarterlyDividendBeforeTax
+        preCombined[i].detail.yearlyDividendBeforeTax += p.detail.yearlyDividendBeforeTax
+        preCombined[i].detail.monthlyDividendAfterTax += p.detail.monthlyDividendAfterTax
+        preCombined[i].detail.quarterlyDividendAfterTax += p.detail.quarterlyDividendAfterTax
+        preCombined[i].detail.yearlyDividendAfterTax += p.detail.yearlyDividendAfterTax
+      }
     })
     post.forEach((p, i) => {
       postCombined[i].totalAsset += p.totalAsset
       postCombined[i].dividendBeforeTax += p.dividendBeforeTax
       postCombined[i].dividendAfterTax += p.dividendAfterTax
+      if (p.detail && postCombined[i].detail) {
+        postCombined[i].detail.startAsset += p.detail.startAsset
+        postCombined[i].detail.yearlyContribution += p.detail.yearlyContribution
+        postCombined[i].detail.growthAmount += p.detail.growthAmount
+        postCombined[i].detail.reinvestAmount += p.detail.reinvestAmount
+        postCombined[i].detail.taxAmount += p.detail.taxAmount
+        postCombined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
+        postCombined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
+        postCombined[i].detail.paymentCount += p.detail.paymentCount
+        postCombined[i].detail.monthlyDividendBeforeTax += p.detail.monthlyDividendBeforeTax
+        postCombined[i].detail.quarterlyDividendBeforeTax += p.detail.quarterlyDividendBeforeTax
+        postCombined[i].detail.yearlyDividendBeforeTax += p.detail.yearlyDividendBeforeTax
+        postCombined[i].detail.monthlyDividendAfterTax += p.detail.monthlyDividendAfterTax
+        postCombined[i].detail.quarterlyDividendAfterTax += p.detail.quarterlyDividendAfterTax
+        postCombined[i].detail.yearlyDividendAfterTax += p.detail.yearlyDividendAfterTax
+      }
     })
   }
 

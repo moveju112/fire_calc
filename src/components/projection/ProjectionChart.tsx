@@ -3,7 +3,10 @@ import {
 } from 'recharts'
 import type { YearlyProjection } from '../../types'
 
-type Props = { projections: YearlyProjection[] }
+type Props = {
+  projections: YearlyProjection[]
+  hideSensitiveInfo?: boolean
+}
 
 function fmtYAxis(value: number) {
   if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(0)}조`
@@ -19,7 +22,18 @@ function fmtTooltip(value: number) {
   return `${Math.round(value).toLocaleString()}원`
 }
 
-export function ProjectionChart({ projections }: Props) {
+function HiddenChartPlaceholder() {
+  return (
+    <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
+      <div>
+        <p className="text-sm font-semibold text-slate-700">민감정보 숨김 중</p>
+        <p className="mt-1 text-xs text-slate-500">총자산 선은 숨기고 배당 추이만 보여줍니다.</p>
+      </div>
+    </div>
+  )
+}
+
+export function ProjectionChart({ projections, hideSensitiveInfo }: Props) {
   const data = projections.map((p) => ({
     year: `${p.year}년`,
     총자산: Math.round(p.totalAsset),
@@ -27,16 +41,19 @@ export function ProjectionChart({ projections }: Props) {
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-        <YAxis tickFormatter={fmtYAxis} tick={{ fontSize: 11 }} width={70} />
-        <Tooltip formatter={(value) => fmtTooltip(Number(value))} />
-        <Legend />
-        <Line type="monotone" dataKey="총자산" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-        <Line type="monotone" dataKey="세후배당" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
-      </LineChart>
-    </ResponsiveContainer>
+    <div>
+      {hideSensitiveInfo && <div className="mb-3"><HiddenChartPlaceholder /></div>}
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart data={data} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+          <YAxis tickFormatter={fmtYAxis} tick={{ fontSize: 11 }} width={70} />
+          <Tooltip formatter={(value, name) => hideSensitiveInfo && name === '총자산' ? '비공개' : fmtTooltip(Number(value))} />
+          <Legend />
+          {!hideSensitiveInfo && <Line type="monotone" dataKey="총자산" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />}
+          <Line type="monotone" dataKey="세후배당" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

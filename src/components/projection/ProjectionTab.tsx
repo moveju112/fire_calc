@@ -29,6 +29,7 @@ export function ProjectionTab() {
   const contributions = usePortfolioStore((s) => s.contributions)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [fireSimYear, setFireSimYear] = useState<number | null>(null)
+  const [hideSensitiveInfo, setHideSensitiveInfo] = useState(false)
 
   const projections =
     viewMode === 'all'
@@ -45,11 +46,26 @@ export function ProjectionTab() {
       ? calcCurrentDividend(Object.values(accounts))
       : calcCurrentDividend([accounts[viewMode]])
 
-  // FIRE 시뮬: 전체 계좌 기준으로만 계산 (저장 안 함)
+  const fireSimAccounts =
+    viewMode === 'all'
+      ? Object.values(accounts)
+      : [accounts[viewMode]]
+
+  // FIRE 시뮬: 현재 선택된 뷰 기준으로만 계산 (저장 안 함)
   const fireSim =
     fireSimYear
-      ? calcFireSimProjection(Object.values(accounts), contributions, fireSimYear)
+      ? calcFireSimProjection(fireSimAccounts, contributions, fireSimYear)
       : null
+
+  const tableProjections =
+    fireSim && fireSimYear
+      ? projections.map((projection) => {
+          if (projection.year <= fireSimYear) {
+            return fireSim.pre[projection.year - 1] ?? projection
+          }
+          return fireSim.post[projection.year - fireSimYear - 1] ?? projection
+        })
+      : projections
 
   const handleFireSim = (year: number) => {
     setFireSimYear(year === 0 ? null : year)
@@ -60,6 +76,16 @@ export function ProjectionTab() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-slate-800">20년 예측 분석</h2>
         <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setHideSensitiveInfo((prev) => !prev)}
+            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+              hideSensitiveInfo
+                ? 'border-slate-300 bg-slate-700 text-white hover:bg-slate-800'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {hideSensitiveInfo ? '민감정보 표시' : '민감정보 숨기기'}
+          </button>
           <button
             onClick={() => setViewMode('all')}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -88,16 +114,17 @@ export function ProjectionTab() {
 
       <div className="bg-white rounded-lg border border-slate-200 mb-6">
         <ProjectionTable
-          projections={projections}
+          projections={tableProjections}
           currentTotalAsset={currentTotalAsset}
           currentDividend={currentDividend}
           fireSimYear={fireSimYear}
           onFireSim={handleFireSim}
+          hideSensitiveInfo={hideSensitiveInfo}
         />
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-        <ProjectionChart projections={projections} />
+        <ProjectionChart projections={projections} hideSensitiveInfo={hideSensitiveInfo} />
       </div>
 
       {fireSim && fireSimYear && (
@@ -106,6 +133,7 @@ export function ProjectionTab() {
             fireYear={fireSimYear}
             pre={fireSim.pre}
             post={fireSim.post}
+            hideSensitiveInfo={hideSensitiveInfo}
           />
         </div>
       )}
