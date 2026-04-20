@@ -5,6 +5,7 @@ import type { YearlyProjection } from '../../types'
 
 type Props = {
   projections: YearlyProjection[]
+  comparisonProjections?: YearlyProjection[]
   hideSensitiveInfo?: boolean
 }
 
@@ -24,7 +25,7 @@ function fmtTooltip(value: number) {
 
 function HiddenChartPlaceholder() {
   return (
-    <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
+    <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
       <div>
         <p className="text-sm font-semibold text-slate-700">민감정보 숨김 중</p>
         <p className="mt-1 text-xs text-slate-500">총자산 선은 숨기고 배당 추이만 보여줍니다.</p>
@@ -33,11 +34,12 @@ function HiddenChartPlaceholder() {
   )
 }
 
-export function ProjectionChart({ projections, hideSensitiveInfo }: Props) {
+export function ProjectionChart({ projections, comparisonProjections, hideSensitiveInfo }: Props) {
   const data = projections.map((p) => ({
     year: `${p.year}년`,
     총자산: Math.round(p.totalAsset),
     세후배당: Math.round(p.dividendAfterTax),
+    기준배당: Math.round(comparisonProjections?.find((item) => item.year === p.year)?.dividendAfterTax ?? p.dividendAfterTax),
   }))
 
   return (
@@ -51,6 +53,9 @@ export function ProjectionChart({ projections, hideSensitiveInfo }: Props) {
           <Tooltip formatter={(value, name) => hideSensitiveInfo && name === '총자산' ? '비공개' : fmtTooltip(Number(value))} />
           <Legend />
           {!hideSensitiveInfo && <Line type="monotone" dataKey="총자산" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />}
+          {comparisonProjections && (
+            <Line type="monotone" dataKey="기준배당" name="세후배당(미포함)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} />
+          )}
           <Line type="monotone" dataKey="세후배당" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
         </LineChart>
       </ResponsiveContainer>

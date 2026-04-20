@@ -1,4 +1,10 @@
-import type { Account, MonthlyContribution, ProjectionDetail, YearlyProjection } from '../types'
+import type {
+  Account,
+  ConversionStrategy,
+  MonthlyContribution,
+  ProjectionDetail,
+  YearlyProjection,
+} from '../types'
 import { calcAfterTax, calcReinvestAmount, calcIsaAfterTaxIncremental } from './taxCalc'
 
 function shouldPayThisMonth(frequency: 1 | 4 | 12, month: number): boolean {
@@ -32,6 +38,7 @@ type SimOptions = {
   initialBalances: Map<string, number>
   contribution?: MonthlyContribution
   enableReinvest: boolean
+  includeConversion?: boolean
 }
 
 function createEmptyProjectionDetail(): ProjectionDetail {
@@ -41,6 +48,9 @@ function createEmptyProjectionDetail(): ProjectionDetail {
     growthAmount: 0,
     reinvestAmount: 0,
     taxAmount: 0,
+    conversionAmount: 0,
+    conversionSourceCount: 0,
+    conversionApplied: false,
     monthlyContributionCount: 0,
     monthlyGrowthCount: 0,
     paymentCount: 0,
@@ -51,6 +61,78 @@ function createEmptyProjectionDetail(): ProjectionDetail {
     quarterlyDividendAfterTax: 0,
     yearlyDividendAfterTax: 0,
   }
+}
+
+function getActiveConversionStrategy(account: Account, includeConversion?: boolean): ConversionStrategy | null {
+  if (!includeConversion) return null
+
+  const strategy = account.conversionStrategy
+  if (!strategy?.enabled) return null
+  if (strategy.conversionYear < 1) return null
+  if (strategy.sellRatio <= 0) return null
+
+  const validSourceStockIds = strategy.sourceStockIds.filter((stockId) =>
+    account.stocks.some((stock) => stock.id === stockId)
+  )
+  const validAllocations = strategy.allocations.filter(
+    (allocation) => allocation.ratio > 0 && account.stocks.some((stock) => stock.id === allocation.stockId)
+  )
+
+  if (validSourceStockIds.length === 0 || validAllocations.length === 0) {
+    return null
+  }
+
+  return {
+    ...strategy,
+    sourceStockIds: validSourceStockIds,
+    allocations: validAllocations,
+  }
+}
+
+export function hasActiveConversionStrategy(account: Account): boolean {
+  return getActiveConversionStrategy(account, true) !== null
+}
+
+export function hasAnyActiveConversionStrategy(accounts: Account[]): boolean {
+  return accounts.some((account) => hasActiveConversionStrategy(account))
+}
+
+function applyConversionStrategyIfNeeded(
+  account: Account,
+  balances: Map<string, number>,
+  detail: ProjectionDetail,
+  year: number,
+  includeConversion?: boolean
+) {
+  const strategy = getActiveConversionStrategy(account, includeConversion)
+  if (!strategy || strategy.conversionYear !== year || detail.conversionApplied) return
+
+  const targetWeights = buildWeightMap(strategy.allocations, balances)
+  if (targetWeights.size === 0) return
+
+  const sellMultiplier = Math.min(strategy.sellRatio, 100) / 100
+  let totalConvertedAmount = 0
+  let conversionSourceCount = 0
+
+  for (const stockId of strategy.sourceStockIds) {
+    const currentBalance = balances.get(stockId) ?? 0
+    if (currentBalance <= 0) continue
+    const sellAmount = currentBalance * sellMultiplier
+    if (sellAmount <= 0) continue
+    balances.set(stockId, currentBalance - sellAmount)
+    totalConvertedAmount += sellAmount
+    conversionSourceCount += 1
+  }
+
+  if (totalConvertedAmount <= 0) return
+
+  for (const [stockId, weight] of targetWeights) {
+    balances.set(stockId, (balances.get(stockId) ?? 0) + totalConvertedAmount * weight)
+  }
+
+  detail.conversionApplied = true
+  detail.conversionAmount = totalConvertedAmount
+  detail.conversionSourceCount = conversionSourceCount
 }
 
 function runAccountSimulation(
@@ -91,6 +173,9 @@ function runAccountSimulation(
     let monthlyDividendAfterTax = 0
     let quarterlyDividendAfterTax = 0
     let yearlyDividendAfterTaxByFrequency = 0
+    const detail = createEmptyProjectionDetail()
+
+    applyConversionStrategyIfNeeded(account, balances, detail, year, options.includeConversion)
 
     for (let month = 1; month <= 12; month++) {
       // 1) 월 납입
@@ -176,22 +261,20 @@ function runAccountSimulation(
     let totalAsset = 0
     for (const b of balances.values()) totalAsset += b
 
-    const detail: ProjectionDetail = {
-      startAsset,
-      yearlyContribution,
-      growthAmount: yearlyGrowthAmount,
-      reinvestAmount: yearlyReinvestAmount,
-      taxAmount: yearDividendBeforeTax - yearDividendAfterTax,
-      monthlyContributionCount,
-      monthlyGrowthCount: 12,
-      paymentCount,
-      monthlyDividendBeforeTax,
-      quarterlyDividendBeforeTax,
-      yearlyDividendBeforeTax: yearlyDividendBeforeTaxByFrequency,
-      monthlyDividendAfterTax,
-      quarterlyDividendAfterTax,
-      yearlyDividendAfterTax: yearlyDividendAfterTaxByFrequency,
-    }
+    detail.startAsset = startAsset
+    detail.yearlyContribution = yearlyContribution
+    detail.growthAmount = yearlyGrowthAmount
+    detail.reinvestAmount = yearlyReinvestAmount
+    detail.taxAmount = yearDividendBeforeTax - yearDividendAfterTax
+    detail.monthlyContributionCount = monthlyContributionCount
+    detail.monthlyGrowthCount = 12
+    detail.paymentCount = paymentCount
+    detail.monthlyDividendBeforeTax = monthlyDividendBeforeTax
+    detail.quarterlyDividendBeforeTax = quarterlyDividendBeforeTax
+    detail.yearlyDividendBeforeTax = yearlyDividendBeforeTaxByFrequency
+    detail.monthlyDividendAfterTax = monthlyDividendAfterTax
+    detail.quarterlyDividendAfterTax = quarterlyDividendAfterTax
+    detail.yearlyDividendAfterTax = yearlyDividendAfterTaxByFrequency
 
     results.push({
       year,
@@ -205,7 +288,11 @@ function runAccountSimulation(
   return { projections: results, finalBalances: balances }
 }
 
-export function calcProjection(account: Account, contribution?: MonthlyContribution): YearlyProjection[] {
+export function calcProjection(
+  account: Account,
+  contribution?: MonthlyContribution,
+  options?: { includeConversion?: boolean }
+): YearlyProjection[] {
   const initialBalances = new Map(account.stocks.map((s) => [s.id, account.totalAmount * (s.allocation / 100)]))
   return runAccountSimulation(account, {
     years: 20,
@@ -213,12 +300,14 @@ export function calcProjection(account: Account, contribution?: MonthlyContribut
     initialBalances,
     contribution,
     enableReinvest: true,
+    includeConversion: options?.includeConversion,
   }).projections
 }
 
 export function calcAllAccountsProjection(
   accounts: Account[],
-  contributions?: Record<string, MonthlyContribution>
+  contributions?: Record<string, MonthlyContribution>,
+  options?: { includeConversion?: boolean }
 ): YearlyProjection[] {
   const combined: YearlyProjection[] = Array.from({ length: 20 }, (_, i) => ({
     year: i + 1,
@@ -229,7 +318,7 @@ export function calcAllAccountsProjection(
   }))
   for (const account of accounts) {
     const contribution = contributions?.[account.type]
-    calcProjection(account, contribution).forEach((p, i) => {
+    calcProjection(account, contribution, options).forEach((p, i) => {
       combined[i].totalAsset += p.totalAsset
       combined[i].dividendBeforeTax += p.dividendBeforeTax
       combined[i].dividendAfterTax += p.dividendAfterTax
@@ -239,6 +328,9 @@ export function calcAllAccountsProjection(
         combined[i].detail.growthAmount += p.detail.growthAmount
         combined[i].detail.reinvestAmount += p.detail.reinvestAmount
         combined[i].detail.taxAmount += p.detail.taxAmount
+        combined[i].detail.conversionAmount += p.detail.conversionAmount
+        combined[i].detail.conversionSourceCount += p.detail.conversionSourceCount
+        combined[i].detail.conversionApplied = combined[i].detail.conversionApplied || p.detail.conversionApplied
         combined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
         combined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
         combined[i].detail.paymentCount += p.detail.paymentCount
@@ -264,7 +356,8 @@ export function calcFireSimProjection(
   accounts: Account[],
   contributions: Record<string, MonthlyContribution>,
   fireYear: number,
-  postFireYears = 20
+  postFireYears = 20,
+  options?: { includeConversion?: boolean }
 ): { pre: YearlyProjection[]; post: YearlyProjection[] } {
   const preCombined: YearlyProjection[] = Array.from({ length: fireYear }, (_, i) => ({
     year: i + 1,
@@ -292,6 +385,7 @@ export function calcFireSimProjection(
       initialBalances,
       contribution,
       enableReinvest: true,
+      includeConversion: options?.includeConversion,
     })
 
     // Phase 2: 납입·재투자 없이 (yearOffset=fireYear 로 dividendGrowth 연속성 보장)
@@ -301,6 +395,7 @@ export function calcFireSimProjection(
       initialBalances: finalBalances,
       contribution: undefined,
       enableReinvest: false,
+      includeConversion: options?.includeConversion,
     })
 
     pre.forEach((p, i) => {
@@ -313,6 +408,9 @@ export function calcFireSimProjection(
         preCombined[i].detail.growthAmount += p.detail.growthAmount
         preCombined[i].detail.reinvestAmount += p.detail.reinvestAmount
         preCombined[i].detail.taxAmount += p.detail.taxAmount
+        preCombined[i].detail.conversionAmount += p.detail.conversionAmount
+        preCombined[i].detail.conversionSourceCount += p.detail.conversionSourceCount
+        preCombined[i].detail.conversionApplied = preCombined[i].detail.conversionApplied || p.detail.conversionApplied
         preCombined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
         preCombined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
         preCombined[i].detail.paymentCount += p.detail.paymentCount
@@ -334,6 +432,9 @@ export function calcFireSimProjection(
         postCombined[i].detail.growthAmount += p.detail.growthAmount
         postCombined[i].detail.reinvestAmount += p.detail.reinvestAmount
         postCombined[i].detail.taxAmount += p.detail.taxAmount
+        postCombined[i].detail.conversionAmount += p.detail.conversionAmount
+        postCombined[i].detail.conversionSourceCount += p.detail.conversionSourceCount
+        postCombined[i].detail.conversionApplied = postCombined[i].detail.conversionApplied || p.detail.conversionApplied
         postCombined[i].detail.monthlyContributionCount += p.detail.monthlyContributionCount
         postCombined[i].detail.monthlyGrowthCount += p.detail.monthlyGrowthCount
         postCombined[i].detail.paymentCount += p.detail.paymentCount

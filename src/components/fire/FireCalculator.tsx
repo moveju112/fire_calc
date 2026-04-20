@@ -1,5 +1,5 @@
 import { usePortfolioStore } from '../../store/portfolioStore'
-import { calcAllAccountsProjection } from '../../utils/projection'
+import { calcAllAccountsProjection, hasAnyActiveConversionStrategy } from '../../utils/projection'
 import { fmt } from '../../utils/format'
 
 export function FireCalculator() {
@@ -8,8 +8,11 @@ export function FireCalculator() {
   const fireTarget = usePortfolioStore((s) => s.fireTarget)
   const setFireTarget = usePortfolioStore((s) => s.setFireTarget)
 
-  const projections = calcAllAccountsProjection(Object.values(accounts), contributions)
+  const accountList = Object.values(accounts)
+  const projections = calcAllAccountsProjection(accountList, contributions)
+  const conversionProjections = calcAllAccountsProjection(accountList, contributions, { includeConversion: true })
   const currentAsset = Object.values(accounts).reduce((s, a) => s + a.totalAmount, 0)
+  const hasConversionStrategy = hasAnyActiveConversionStrategy(accountList)
 
   const requiredByExpense =
     fireTarget.targetMonthlyExpense > 0
@@ -19,6 +22,8 @@ export function FireCalculator() {
   const effectiveTarget = Math.max(fireTarget.targetAsset, requiredByExpense)
 
   const fireYear = projections.find((p) => p.totalAsset >= effectiveTarget)?.year ?? null
+  const conversionFireYear =
+    conversionProjections.find((p) => p.totalAsset >= effectiveTarget)?.year ?? null
 
   const progress =
     effectiveTarget > 0 ? Math.min((currentAsset / effectiveTarget) * 100, 100) : 0
@@ -84,10 +89,31 @@ export function FireCalculator() {
               fireYear ? 'text-emerald-700' : 'text-slate-400'
             }`}
           >
-            {fireYear ? `${fireYear}년 후` : '10년 내 불가'}
+            {fireYear ? `${fireYear}년 후` : '20년 내 불가'}
           </p>
         </div>
       </div>
+
+      {hasConversionStrategy && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-900">전환 전략 반영 시점</p>
+              <p className="mt-1 text-xs text-amber-700">
+                매도세금과 슬리피지는 제외하고 계좌 내 재배치만 반영했습니다.
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`text-lg font-bold ${conversionFireYear ? 'text-emerald-700' : 'text-slate-500'}`}>
+                {conversionFireYear ? `${conversionFireYear}년 후` : '20년 내 미달성'}
+              </p>
+              <p className="text-xs text-amber-700">
+                기존 대비 {conversionFireYear && fireYear ? `${conversionFireYear - fireYear}년` : '비교 불가'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {effectiveTarget > 0 && (
         <div>

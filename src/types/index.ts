@@ -30,11 +30,26 @@ export type ReinvestAllocation = {
   ratio: number  // %
 }
 
+export type ConversionAllocation = {
+  id: string
+  stockId: string
+  ratio: number  // %
+}
+
+export type ConversionStrategy = {
+  enabled: boolean
+  conversionYear: number
+  sellRatio: number
+  sourceStockIds: string[]
+  allocations: ConversionAllocation[]
+}
+
 export type Account = {
   type: AccountType
   totalAmount: number
   stocks: Stock[]
   reinvestAllocations?: ReinvestAllocation[]  // 배당 재투자 배분 (없으면 재투자 안 함)
+  conversionStrategy?: ConversionStrategy
 }
 
 export type FireTarget = {
@@ -60,6 +75,9 @@ export type ProjectionDetail = {
   growthAmount: number
   reinvestAmount: number
   taxAmount: number
+  conversionAmount: number
+  conversionSourceCount: number
+  conversionApplied: boolean
   monthlyContributionCount: number
   monthlyGrowthCount: number
   paymentCount: number

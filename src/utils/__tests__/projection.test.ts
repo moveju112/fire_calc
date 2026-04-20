@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { calcProjection, calcAllAccountsProjection } from '../projection'
 import type { Account } from '../../types'
@@ -17,6 +16,38 @@ const singleStockAccount: Account = {
       dividendFrequency: 1 as const,  // 연배당: 기존 테스트와 동일 조건
     },
   ],
+}
+
+const conversionAccount: Account = {
+  type: 'overseas',
+  totalAmount: 100_000_000,
+  stocks: [
+    {
+      id: 'growth',
+      name: 'QQQ',
+      allocation: 100,
+      annualGrowth: 12,
+      dividendYield: 0.6,
+      dividendGrowth: 5,
+      dividendFrequency: 4,
+    },
+    {
+      id: 'income',
+      name: 'SCHD',
+      allocation: 0,
+      annualGrowth: 7,
+      dividendYield: 3.5,
+      dividendGrowth: 6,
+      dividendFrequency: 4,
+    },
+  ],
+  conversionStrategy: {
+    enabled: true,
+    conversionYear: 5,
+    sellRatio: 100,
+    sourceStockIds: ['growth'],
+    allocations: [{ id: 'alloc-1', stockId: 'income', ratio: 100 }],
+  },
 }
 
 describe('calcProjection', () => {
@@ -62,6 +93,16 @@ describe('calcProjection', () => {
     )
     expect(result[0].detail?.yearlyDividendBeforeTax).toBeCloseTo(result[0].dividendBeforeTax, 3)
     expect(result[0].detail?.monthlyGrowthCount).toBe(12)
+  })
+
+  it('전환 전략 반영 시 전환 연도에 배당이 증가한다', () => {
+    const withoutConversion = calcProjection(conversionAccount)
+    const withConversion = calcProjection(conversionAccount, undefined, { includeConversion: true })
+
+    expect(withConversion[4].detail?.conversionApplied).toBe(true)
+    expect(withConversion[4].detail?.conversionAmount).toBeGreaterThan(0)
+    expect(withConversion[4].dividendAfterTax).toBeGreaterThan(withoutConversion[4].dividendAfterTax)
+    expect(withConversion[5].dividendAfterTax).toBeGreaterThan(withoutConversion[5].dividendAfterTax)
   })
 })
 

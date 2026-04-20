@@ -36,7 +36,7 @@ function HiddenChartPlaceholder({ fireYear }: { fireYear: number }) {
           민감정보 숨김 상태에서는 차트를 가립니다.
         </span>
       </div>
-      <div className="flex h-[340px] items-center justify-center rounded-lg border border-dashed border-amber-200 bg-amber-50/40 text-center">
+      <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-4 text-center">
         <div>
           <p className="text-sm font-semibold text-amber-700">민감정보 숨김 중</p>
           <p className="mt-1 text-xs text-slate-500">총자산 선은 숨기고 배당 추이만 보여줍니다.</p>

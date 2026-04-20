@@ -1,7 +1,17 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuidv4 } from 'uuid'
-import type { Account, AccountType, ContributionAllocation, FireTarget, MonthlyContribution, ReinvestAllocation, Stock } from '../types'
+import type {
+  Account,
+  AccountType,
+  ContributionAllocation,
+  ConversionAllocation,
+  ConversionStrategy,
+  FireTarget,
+  MonthlyContribution,
+  ReinvestAllocation,
+  Stock,
+} from '../types'
 import { ACCOUNT_TYPES } from '../types'
 
 type PortfolioStore = {
@@ -9,13 +19,18 @@ type PortfolioStore = {
   fireTarget: FireTarget
   contributions: Record<AccountType, MonthlyContribution>
   setTotalAmount: (accountType: AccountType, amount: number) => void
-  addStock: (accountType: AccountType) => void
+  addStock: (accountType: AccountType, initialPatch?: Partial<Stock>) => string
   updateStock: (accountType: AccountType, stockId: string, patch: Partial<Stock>) => void
   removeStock: (accountType: AccountType, stockId: string) => void
   setStockAmount: (accountType: AccountType, stockId: string, amount: number) => void
   addReinvestAllocation: (accountType: AccountType) => void
   updateReinvestAllocation: (accountType: AccountType, allocId: string, patch: Partial<ReinvestAllocation>) => void
   removeReinvestAllocation: (accountType: AccountType, allocId: string) => void
+  setConversionStrategy: (accountType: AccountType, patch: Partial<ConversionStrategy>) => void
+  toggleConversionSourceStock: (accountType: AccountType, stockId: string) => void
+  addConversionAllocation: (accountType: AccountType, initialPatch?: Partial<ConversionAllocation>) => string
+  updateConversionAllocation: (accountType: AccountType, allocId: string, patch: Partial<ConversionAllocation>) => void
+  removeConversionAllocation: (accountType: AccountType, allocId: string) => void
   setFireTarget: (patch: Partial<FireTarget>) => void
   setContributionAmount: (accountType: AccountType, amount: number) => void
   addContributionAllocation: (accountType: AccountType) => void
@@ -23,9 +38,28 @@ type PortfolioStore = {
   removeContributionAllocation: (accountType: AccountType, allocId: string) => void
 }
 
+function createDefaultConversionStrategy(): ConversionStrategy {
+  return {
+    enabled: false,
+    conversionYear: 10,
+    sellRatio: 100,
+    sourceStockIds: [],
+    allocations: [],
+  }
+}
+
 const defaultAccounts = (): Record<AccountType, Account> =>
   Object.fromEntries(
-    ACCOUNT_TYPES.map((type) => [type, { type, totalAmount: 0, stocks: [], reinvestAllocations: [] }])
+    ACCOUNT_TYPES.map((type) => [
+      type,
+      {
+        type,
+        totalAmount: 0,
+        stocks: [],
+        reinvestAllocations: [],
+        conversionStrategy: createDefaultConversionStrategy(),
+      },
+    ])
   ) as unknown as Record<AccountType, Account>
 
 const defaultContributions = (): Record<AccountType, MonthlyContribution> =>
@@ -48,7 +82,8 @@ export const usePortfolioStore = create<PortfolioStore>()(
           },
         })),
 
-      addStock: (accountType) =>
+      addStock: (accountType, initialPatch) => {
+        const stockId = uuidv4()
         set((state) => ({
           accounts: {
             ...state.accounts,
@@ -57,18 +92,21 @@ export const usePortfolioStore = create<PortfolioStore>()(
               stocks: [
                 ...state.accounts[accountType].stocks,
                 {
-                  id: uuidv4(),
+                  id: stockId,
                   name: '',
                   allocation: 0,
                   annualGrowth: 0,
                   dividendYield: 0,
                   dividendGrowth: 0,
                   dividendFrequency: 12,
+                  ...initialPatch,
                 },
               ],
             },
           },
-        })),
+        }))
+        return stockId
+      },
 
       updateStock: (accountType, stockId, patch) =>
         set((state) => ({
@@ -94,6 +132,11 @@ export const usePortfolioStore = create<PortfolioStore>()(
                 ...account,
                 stocks: account.stocks.filter((s) => s.id !== stockId),
                 reinvestAllocations: (account.reinvestAllocations ?? []).filter((a) => a.stockId !== stockId),
+                conversionStrategy: {
+                  ...(account.conversionStrategy ?? createDefaultConversionStrategy()),
+                  sourceStockIds: (account.conversionStrategy?.sourceStockIds ?? []).filter((id) => id !== stockId),
+                  allocations: (account.conversionStrategy?.allocations ?? []).filter((a) => a.stockId !== stockId),
+                },
               },
             },
             contributions: {
@@ -168,6 +211,102 @@ export const usePortfolioStore = create<PortfolioStore>()(
             },
           },
         })),
+
+      setConversionStrategy: (accountType, patch) =>
+        set((state) => ({
+          accounts: {
+            ...state.accounts,
+            [accountType]: {
+              ...state.accounts[accountType],
+              conversionStrategy: {
+                ...(state.accounts[accountType].conversionStrategy ?? createDefaultConversionStrategy()),
+                ...patch,
+              },
+            },
+          },
+        })),
+
+      toggleConversionSourceStock: (accountType, stockId) =>
+        set((state) => {
+          const account = state.accounts[accountType]
+          const strategy = account.conversionStrategy ?? createDefaultConversionStrategy()
+          return {
+            accounts: {
+              ...state.accounts,
+              [accountType]: {
+                ...account,
+                conversionStrategy: {
+                  ...strategy,
+                  sourceStockIds: strategy.sourceStockIds.includes(stockId)
+                    ? strategy.sourceStockIds.filter((id) => id !== stockId)
+                    : [...strategy.sourceStockIds, stockId],
+                },
+              },
+            },
+          }
+        }),
+
+      addConversionAllocation: (accountType, initialPatch) => {
+        const allocationId = uuidv4()
+        set((state) => {
+          const account = state.accounts[accountType]
+          const strategy = account.conversionStrategy ?? createDefaultConversionStrategy()
+          return {
+            accounts: {
+              ...state.accounts,
+              [accountType]: {
+                ...account,
+                conversionStrategy: {
+                  ...strategy,
+                  allocations: [
+                    ...strategy.allocations,
+                    { id: allocationId, stockId: '', ratio: 0, ...initialPatch },
+                  ],
+                },
+              },
+            },
+          }
+        })
+        return allocationId
+      },
+
+      updateConversionAllocation: (accountType, allocId, patch) =>
+        set((state) => {
+          const account = state.accounts[accountType]
+          const strategy = account.conversionStrategy ?? createDefaultConversionStrategy()
+          return {
+            accounts: {
+              ...state.accounts,
+              [accountType]: {
+                ...account,
+                conversionStrategy: {
+                  ...strategy,
+                  allocations: strategy.allocations.map((allocation) =>
+                    allocation.id === allocId ? { ...allocation, ...patch } : allocation
+                  ),
+                },
+              },
+            },
+          }
+        }),
+
+      removeConversionAllocation: (accountType, allocId) =>
+        set((state) => {
+          const account = state.accounts[accountType]
+          const strategy = account.conversionStrategy ?? createDefaultConversionStrategy()
+          return {
+            accounts: {
+              ...state.accounts,
+              [accountType]: {
+                ...account,
+                conversionStrategy: {
+                  ...strategy,
+                  allocations: strategy.allocations.filter((allocation) => allocation.id !== allocId),
+                },
+              },
+            },
+          }
+        }),
 
       setFireTarget: (patch) =>
         set((state) => ({

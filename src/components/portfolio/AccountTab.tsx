@@ -19,6 +19,11 @@ export function AccountTab({ accountType }: Props) {
   const addReinvestAllocation = usePortfolioStore((s) => s.addReinvestAllocation)
   const updateReinvestAllocation = usePortfolioStore((s) => s.updateReinvestAllocation)
   const removeReinvestAllocation = usePortfolioStore((s) => s.removeReinvestAllocation)
+  const setConversionStrategy = usePortfolioStore((s) => s.setConversionStrategy)
+  const toggleConversionSourceStock = usePortfolioStore((s) => s.toggleConversionSourceStock)
+  const addConversionAllocation = usePortfolioStore((s) => s.addConversionAllocation)
+  const updateConversionAllocation = usePortfolioStore((s) => s.updateConversionAllocation)
+  const removeConversionAllocation = usePortfolioStore((s) => s.removeConversionAllocation)
 
   const [amountDisplay, setAmountDisplay] = useState(() => formatWithCommas(account.totalAmount))
   const totalFocused = useRef(false)
@@ -39,6 +44,21 @@ export function AccountTab({ accountType }: Props) {
 
   const totalAllocation = account.stocks.reduce((sum, s) => sum + s.allocation, 0)
   const allocationOver = totalAllocation > 100 + 0.0001
+  const conversionStrategy = account.conversionStrategy ?? {
+    enabled: false,
+    conversionYear: 10,
+    sellRatio: 100,
+    sourceStockIds: [],
+    allocations: [],
+  }
+  const conversionRatioTotal = conversionStrategy.allocations.reduce((sum, allocation) => sum + allocation.ratio, 0)
+  const conversionRatioOk =
+    conversionStrategy.allocations.length === 0 || Math.abs(conversionRatioTotal - 100) < 0.01
+
+  const handleAddConversionTargetStock = () => {
+    const newStockId = addStock(accountType, { allocation: 0 })
+    addConversionAllocation(accountType, { stockId: newStockId, ratio: 0 })
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -124,63 +144,229 @@ export function AccountTab({ accountType }: Props) {
       </div>
 
       {account.stocks.length > 0 && (
-        <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-md">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-emerald-800">배당 재투자</span>
-            {(() => {
-              const allocs = account.reinvestAllocations ?? []
-              const total = allocs.reduce((s, a) => s + a.ratio, 0)
-              if (allocs.length === 0) return null
-              return Math.abs(total - 100) < 0.01
-                ? <span className="text-xs text-emerald-600">✓ 합계 100%</span>
-                : <span className="text-xs text-red-500">⚠ 비율 합계 {total.toFixed(1)}%</span>
-            })()}
+        <div className="space-y-4">
+          <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-md">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-emerald-800">배당 재투자</span>
+              {(() => {
+                const allocs = account.reinvestAllocations ?? []
+                const total = allocs.reduce((s, a) => s + a.ratio, 0)
+                if (allocs.length === 0) return null
+                return Math.abs(total - 100) < 0.01
+                  ? <span className="text-xs text-emerald-600">✓ 합계 100%</span>
+                  : <span className="text-xs text-red-500">⚠ 비율 합계 {total.toFixed(1)}%</span>
+              })()}
+            </div>
+
+            {(account.reinvestAllocations ?? []).length > 0 && (
+              <div className="space-y-2 mb-2">
+                {(account.reinvestAllocations ?? []).map((alloc) => (
+                  <div key={alloc.id} className="flex items-center gap-2">
+                    <select
+                      value={alloc.stockId}
+                      onChange={(e) => updateReinvestAllocation(accountType, alloc.id, { stockId: e.target.value })}
+                      className="flex-1 px-2 py-1.5 text-sm border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400 bg-white"
+                    >
+                      <option value="">종목 선택</option>
+                      {account.stocks.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name || '(이름 없음)'}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={alloc.ratio === 0 ? '' : alloc.ratio}
+                      placeholder="0"
+                      min={0}
+                      max={100}
+                      onChange={(e) => updateReinvestAllocation(accountType, alloc.id, { ratio: parseFloat(e.target.value) || 0 })}
+                      className="w-16 px-2 py-1.5 text-sm border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400 text-right"
+                    />
+                    <span className="text-sm text-emerald-700">%</span>
+                    <button
+                      onClick={() => removeReinvestAllocation(accountType, alloc.id)}
+                      className="text-emerald-400 hover:text-red-500 transition-colors text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={() => addReinvestAllocation(accountType)}
+              className="text-xs px-2 py-1 border border-dashed border-emerald-400 text-emerald-700 rounded hover:bg-emerald-100 transition-colors"
+            >
+              + 종목 추가
+            </button>
+            {(account.reinvestAllocations ?? []).length === 0 && (
+              <span className="ml-2 text-xs text-emerald-600">재투자 종목을 추가하세요</span>
+            )}
           </div>
 
-          {(account.reinvestAllocations ?? []).length > 0 && (
-            <div className="space-y-2 mb-2">
-              {(account.reinvestAllocations ?? []).map((alloc) => (
-                <div key={alloc.id} className="flex items-center gap-2">
-                  <select
-                    value={alloc.stockId}
-                    onChange={(e) => updateReinvestAllocation(accountType, alloc.id, { stockId: e.target.value })}
-                    className="flex-1 px-2 py-1.5 text-sm border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400 bg-white"
-                  >
-                    <option value="">종목 선택</option>
-                    {account.stocks.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name || '(이름 없음)'}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    value={alloc.ratio === 0 ? '' : alloc.ratio}
-                    placeholder="0"
-                    min={0}
-                    max={100}
-                    onChange={(e) => updateReinvestAllocation(accountType, alloc.id, { ratio: parseFloat(e.target.value) || 0 })}
-                    className="w-16 px-2 py-1.5 text-sm border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-400 text-right"
-                  />
-                  <span className="text-sm text-emerald-700">%</span>
-                  <button
-                    onClick={() => removeReinvestAllocation(accountType, alloc.id)}
-                    className="text-emerald-400 hover:text-red-500 transition-colors text-lg leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+          <div className="px-4 py-4 bg-amber-50 border border-amber-200 rounded-md">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-sm font-medium text-amber-900">전환 전략</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  성장형 자산을 특정 연도 시작 시점에 매도해 배당형 종목으로 재배치합니다.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-amber-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={conversionStrategy.enabled}
+                  onChange={(e) => setConversionStrategy(accountType, { enabled: e.target.checked })}
+                />
+                전환 전략 사용
+              </label>
             </div>
-          )}
 
-          <button
-            onClick={() => addReinvestAllocation(accountType)}
-            className="text-xs px-2 py-1 border border-dashed border-emerald-400 text-emerald-700 rounded hover:bg-emerald-100 transition-colors"
-          >
-            + 종목 추가
-          </button>
-          {(account.reinvestAllocations ?? []).length === 0 && (
-            <span className="ml-2 text-xs text-emerald-600">재투자 종목을 추가하세요</span>
-          )}
+            {conversionStrategy.enabled && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-amber-900">
+                    <span>전환 연도</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={conversionStrategy.conversionYear}
+                      onChange={(e) =>
+                        setConversionStrategy(accountType, {
+                          conversionYear: Math.min(20, Math.max(1, parseInt(e.target.value, 10) || 1)),
+                        })
+                      }
+                      className="w-20 px-2 py-1.5 border border-amber-300 rounded text-right bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                    <span>년 후</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-amber-900">
+                    <span>매도 비중</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={conversionStrategy.sellRatio === 0 ? '' : conversionStrategy.sellRatio}
+                      onChange={(e) =>
+                        setConversionStrategy(accountType, {
+                          sellRatio: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)),
+                        })
+                      }
+                      className="w-20 px-2 py-1.5 border border-amber-300 rounded text-right bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                    <span>%</span>
+                  </label>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-amber-900">매도 대상 종목</p>
+                    <span className="text-xs text-amber-700">
+                      여러 종목 선택 가능
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {account.stocks.map((stock) => (
+                      <label
+                        key={stock.id}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm cursor-pointer transition-colors ${
+                          conversionStrategy.sourceStockIds.includes(stock.id)
+                            ? 'border-amber-400 bg-amber-100 text-amber-900'
+                            : 'border-amber-200 bg-white text-amber-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={conversionStrategy.sourceStockIds.includes(stock.id)}
+                          onChange={() => toggleConversionSourceStock(accountType, stock.id)}
+                        />
+                        <span>{stock.name || '(이름 없음)'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-amber-900">매도 대금 재배치</p>
+                    {conversionStrategy.allocations.length > 0 && (
+                      conversionRatioOk
+                        ? <span className="text-xs text-emerald-700">✓ 합계 100%</span>
+                        : <span className="text-xs text-rose-600">⚠ 비율 합계 {conversionRatioTotal.toFixed(1)}%</span>
+                    )}
+                  </div>
+
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleAddConversionTargetStock}
+                      className="text-xs px-2 py-1 border border-amber-300 bg-white text-amber-800 rounded hover:bg-amber-100 transition-colors"
+                    >
+                      + 새 종목 추가 후 전환 대상에 연결
+                    </button>
+                    <span className="text-xs text-amber-700">
+                      비중 0% 종목이 생성되며, 상단 표에서 종목명과 성장률/배당률을 바로 입력하면 됩니다.
+                    </span>
+                  </div>
+
+                  {conversionStrategy.allocations.length > 0 && (
+                    <div className="space-y-2 mb-2">
+                      {conversionStrategy.allocations.map((allocation) => (
+                        <div key={allocation.id} className="flex items-center gap-2">
+                          <select
+                            value={allocation.stockId}
+                            onChange={(e) =>
+                              updateConversionAllocation(accountType, allocation.id, { stockId: e.target.value })
+                            }
+                            className="flex-1 px-2 py-1.5 text-sm border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+                          >
+                            <option value="">종목 선택</option>
+                            {account.stocks.map((stock) => (
+                              <option key={stock.id} value={stock.id}>{stock.name || '(이름 없음)'}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={allocation.ratio === 0 ? '' : allocation.ratio}
+                            placeholder="0"
+                            min={0}
+                            max={100}
+                            onChange={(e) =>
+                              updateConversionAllocation(accountType, allocation.id, {
+                                ratio: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            className="w-16 px-2 py-1.5 text-sm border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-400 text-right"
+                          />
+                          <span className="text-sm text-amber-900">%</span>
+                          <button
+                            onClick={() => removeConversionAllocation(accountType, allocation.id)}
+                            className="text-amber-500 hover:text-red-500 transition-colors text-lg leading-none"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => addConversionAllocation(accountType)}
+                    className="text-xs px-2 py-1 border border-dashed border-amber-400 text-amber-800 rounded hover:bg-amber-100 transition-colors"
+                  >
+                    + 전환 대상 추가
+                  </button>
+                  {conversionStrategy.allocations.length === 0 && (
+                    <span className="ml-2 text-xs text-amber-700">매도 대금을 받을 종목을 추가하세요</span>
+                  )}
+                </div>
+
+                <p className="text-xs text-amber-700 leading-5">
+                  전환은 해당 연도 시작 시점에 적용되며, 매매세금·슬리피지·환전비용은 아직 반영하지 않습니다.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

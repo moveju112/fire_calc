@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { usePortfolioStore } from '../../store/portfolioStore'
-import { calcProjection, calcAllAccountsProjection, calcFireSimProjection } from '../../utils/projection'
+import {
+  calcProjection,
+  calcAllAccountsProjection,
+  calcFireSimProjection,
+  hasAnyActiveConversionStrategy,
+} from '../../utils/projection'
 import { calcAfterTax } from '../../utils/taxCalc'
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType, type Account } from '../../types'
 import { ProjectionTable } from './ProjectionTable'
@@ -30,11 +35,22 @@ export function ProjectionTab() {
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [fireSimYear, setFireSimYear] = useState<number | null>(null)
   const [hideSensitiveInfo, setHideSensitiveInfo] = useState(false)
+  const visibleAccounts =
+    viewMode === 'all'
+      ? Object.values(accounts)
+      : [accounts[viewMode]]
+  const hasConversionStrategy = hasAnyActiveConversionStrategy(visibleAccounts)
 
-  const projections =
+  const baseProjections =
     viewMode === 'all'
       ? calcAllAccountsProjection(Object.values(accounts), contributions)
       : calcProjection(accounts[viewMode], contributions[viewMode])
+  const strategyProjections =
+    hasConversionStrategy
+      ? (viewMode === 'all'
+          ? calcAllAccountsProjection(Object.values(accounts), contributions, { includeConversion: true })
+          : calcProjection(accounts[viewMode], contributions[viewMode], { includeConversion: true }))
+      : baseProjections
 
   const currentTotalAsset =
     viewMode === 'all'
@@ -46,33 +62,44 @@ export function ProjectionTab() {
       ? calcCurrentDividend(Object.values(accounts))
       : calcCurrentDividend([accounts[viewMode]])
 
-  const fireSimAccounts =
-    viewMode === 'all'
-      ? Object.values(accounts)
-      : [accounts[viewMode]]
+  const fireSimAccounts = visibleAccounts
 
   // FIRE 시뮬: 현재 선택된 뷰 기준으로만 계산 (저장 안 함)
-  const fireSim =
+  const baseFireSim =
     fireSimYear
       ? calcFireSimProjection(fireSimAccounts, contributions, fireSimYear)
       : null
+  const strategyFireSim =
+    fireSimYear && hasConversionStrategy
+      ? calcFireSimProjection(fireSimAccounts, contributions, fireSimYear, 20, { includeConversion: true })
+      : null
 
-  const tableProjections =
-    fireSim && fireSimYear
-      ? projections.map((projection) => {
+  const tableBaseProjections =
+    baseFireSim && fireSimYear
+      ? baseProjections.map((projection) => {
           if (projection.year <= fireSimYear) {
-            return fireSim.pre[projection.year - 1] ?? projection
+            return baseFireSim.pre[projection.year - 1] ?? projection
           }
-          return fireSim.post[projection.year - fireSimYear - 1] ?? projection
+          return baseFireSim.post[projection.year - fireSimYear - 1] ?? projection
         })
-      : projections
+      : baseProjections
+  const tableStrategyProjections =
+    strategyFireSim && fireSimYear
+      ? strategyProjections.map((projection) => {
+          if (projection.year <= fireSimYear) {
+            return strategyFireSim.pre[projection.year - 1] ?? projection
+          }
+          return strategyFireSim.post[projection.year - fireSimYear - 1] ?? projection
+        })
+      : strategyProjections
+  const tableProjections = hasConversionStrategy ? tableStrategyProjections : tableBaseProjections
 
   const handleFireSim = (year: number) => {
     setFireSimYear(year === 0 ? null : year)
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-[96rem] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-slate-800">20년 예측 분석</h2>
         <div className="flex gap-2 flex-wrap">
@@ -113,8 +140,14 @@ export function ProjectionTab() {
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 mb-6">
+        {hasConversionStrategy && (
+          <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            전환 반영 배당과 전환 미포함 배당을 함께 비교합니다. 기준 총자산과 증가분은 전환 반영 시나리오 기준입니다.
+          </div>
+        )}
         <ProjectionTable
           projections={tableProjections}
+          comparisonProjections={hasConversionStrategy ? tableBaseProjections : undefined}
           currentTotalAsset={currentTotalAsset}
           currentDividend={currentDividend}
           fireSimYear={fireSimYear}
@@ -124,15 +157,19 @@ export function ProjectionTab() {
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-        <ProjectionChart projections={projections} hideSensitiveInfo={hideSensitiveInfo} />
+        <ProjectionChart
+          projections={strategyProjections}
+          comparisonProjections={hasConversionStrategy ? baseProjections : undefined}
+          hideSensitiveInfo={hideSensitiveInfo}
+        />
       </div>
 
-      {fireSim && fireSimYear && (
+      {baseFireSim && fireSimYear && (
         <div className="bg-white rounded-lg border border-amber-200 p-4">
           <FireSimChart
             fireYear={fireSimYear}
-            pre={fireSim.pre}
-            post={fireSim.post}
+            pre={strategyFireSim?.pre ?? baseFireSim.pre}
+            post={strategyFireSim?.post ?? baseFireSim.post}
             hideSensitiveInfo={hideSensitiveInfo}
           />
         </div>

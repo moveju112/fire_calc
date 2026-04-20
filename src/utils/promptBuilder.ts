@@ -1,7 +1,7 @@
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountType, type MonthlyContribution, type YearlyProjection } from '../types'
 import type { Account } from '../types'
 import type { FireTarget } from '../types'
-import { calcAllAccountsProjection } from './projection'
+import { calcAllAccountsProjection, hasAnyActiveConversionStrategy } from './projection'
 
 export type PromptOptions = {
     includeAccounts: Record<AccountType, boolean>
@@ -75,6 +75,36 @@ function buildReinvestLines(account: Account): string {
         .join('\n')
 }
 
+function buildConversionLines(account: Account): string {
+    const strategy = account.conversionStrategy
+
+    if (!strategy?.enabled) {
+        return '- 사용 안 함'
+    }
+
+    const sourceNames = strategy.sourceStockIds
+        .map((stockId) => account.stocks.find((stock) => stock.id === stockId)?.name || '(이름 없음)')
+        .join(', ')
+
+    const allocationLines =
+        strategy.allocations.length === 0
+            ? '- 재배치 종목 없음'
+            : strategy.allocations
+                  .map((allocation) => {
+                      const stock = account.stocks.find((item) => item.id === allocation.stockId)
+                      return `- ${stock?.name || '(이름 없음)'}: ${formatPercent(allocation.ratio)}`
+                  })
+                  .join('\n')
+
+    return [
+        `- 전환 시점: ${strategy.conversionYear}년 후`,
+        `- 매도 비중: ${formatPercent(strategy.sellRatio)}`,
+        `- 매도 대상: ${sourceNames || '선택 없음'}`,
+        '- 재배치 비율',
+        allocationLines,
+    ].join('\n')
+}
+
 function buildContributionLines(account: Account, contribution: MonthlyContribution): string {
     if (contribution.monthlyAmount <= 0) {
         return '- 월 납입 없음'
@@ -105,7 +135,7 @@ function hasContributionData(contribution: MonthlyContribution): boolean {
     return contribution.monthlyAmount > 0 || contribution.allocations.length > 0
 }
 
-function buildProjectionSummary(projections: YearlyProjection[]): string {
+function buildProjectionSummary(projections: YearlyProjection[], conversionProjections?: YearlyProjection[]): string {
     const targetYears = [1, 5, 10, 20]
 
     return targetYears
@@ -122,6 +152,16 @@ function buildProjectionSummary(projections: YearlyProjection[]): string {
                 `  - 세전 연간 배당: ${formatCurrency(projection.dividendBeforeTax)}`,
                 `  - 세후 연간 배당: ${formatCurrency(projection.dividendAfterTax)}`,
                 `  - 세후 월 배당 추정: ${formatCurrency(projection.dividendAfterTax / 12)}`,
+                ...(conversionProjections
+                    ? (() => {
+                          const conversionProjection = conversionProjections.find((item) => item.year === year)
+                          if (!conversionProjection) return []
+                          return [
+                              `  - 전환 반영 세후 연간 배당: ${formatCurrency(conversionProjection.dividendAfterTax)}`,
+                              `  - 전환 반영 세후 월 배당 추정: ${formatCurrency(conversionProjection.dividendAfterTax / 12)}`,
+                          ]
+                      })()
+                    : []),
             ].join('\n')
         })
         .join('\n')
@@ -160,6 +200,8 @@ function buildAccountSection(accountType: AccountType, accounts: Record<AccountT
         buildStockLines(account),
         '- 배당 재투자 설정',
         buildReinvestLines(account),
+        '- 전환 전략',
+        buildConversionLines(account),
     ].join('\n')
 }
 
@@ -171,6 +213,9 @@ export function buildPortfolioPrompt(
 ): string {
     const accountList = Object.values(accounts)
     const projections = calcAllAccountsProjection(accountList, contributions)
+    const conversionProjections = hasAnyActiveConversionStrategy(accountList)
+        ? calcAllAccountsProjection(accountList, contributions, { includeConversion: true })
+        : undefined
     const activeAccountTypes = ACCOUNT_TYPES.filter(
         (accountType) => options.includeAccounts[accountType] && hasAccountData(accounts[accountType])
     )
@@ -197,6 +242,7 @@ export function buildPortfolioPrompt(
         '[분석 요청 가이드]',
         '- 이 계산기는 배당 투자 중심 가정이다.',
         '- 무배당 성장주 관점이 아니라 배당과 세후 현금흐름 중심으로 해석해줘.',
+        '- 전환 전략이 있으면 전환 전과 전환 후의 세후 배당 차이를 함께 해석해줘.',
         '- 답변할 때 계좌별 세금 차이, 재투자 효과, 월 납입 효과를 분리해서 설명해줘.',
         '',
         '[프로젝트 계산 규칙]',
@@ -212,6 +258,8 @@ export function buildPortfolioPrompt(
         '- ISA는 연간 세전 배당 누적 200만원까지 비과세, 초과분은 9.9% 분리과세다.',
         '- 해외직투 배당세율은 15%, 국내투자 배당세율은 15.4%다.',
         '- 연금저축과 IRP는 표시용 세후 배당 계산 시 3.3%를 적용하지만, 재투자 자체는 세전 기준으로 이뤄진다.',
+        '- 전환 전략이 있으면 지정한 연도 시작 시점에 선택 종목의 일부 또는 전부를 매도하고, 같은 계좌 내 지정 종목 비율로 재배치한다.',
+        '- 전환 전략의 매매세금, 슬리피지, 환전비용은 반영하지 않는다.',
         '- ISA 연간 납입 한도, ISA 풍차돌리기, IRP/연금저축 세액공제 한도는 반영하지 않는다.',
         '',
         ...(options.includeFireSummary
@@ -224,7 +272,7 @@ export function buildPortfolioPrompt(
         ...(options.includeProjectionSummary
             ? [
                   '[20년 예측 주요 스냅샷]',
-                  buildProjectionSummary(projections),
+                  buildProjectionSummary(projections, conversionProjections),
                   '',
               ]
             : []),
